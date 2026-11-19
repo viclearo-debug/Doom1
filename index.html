@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <div id="log">1. Downloading DOOM1.WAD & default.cfg...</div>
+  <div id="log">1. Booting Chocolate Doom...</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
@@ -26,47 +26,26 @@
 
     window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
 
-    Promise.all([
-      fetch('DOOM1.WAD').then(r => {
-        if (!r.ok) throw new Error('DOOM1.WAD HTTP ' + r.status);
-        return r.arrayBuffer();
-      }),
-      fetch('default.cfg').then(r => {
-        if (!r.ok) throw new Error('default.cfg HTTP ' + r.status);
-        return r.arrayBuffer();
-      })
-    ]).then(([wadBuf, cfgBuf]) => {
-      const wadBytes = new Uint8Array(wadBuf);
-      const cfgBytes = new Uint8Array(cfgBuf);
-      log('2. Downloaded (' + wadBytes.length + ' B). Starting engine...');
-
-      window.Module = {
-        canvas: document.getElementById('canvas'),
-        arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-        print: (t) => log('[DOOM] ' + t),
-        printErr: (t) => log('[DOOM] ' + t),
-        preRun: [
-          function() {
-            log('3. Mounting files into virtual disk...');
-            if (typeof Module.FS_createDataFile === 'function') {
-              Module.FS_createDataFile('/', 'DOOM1.WAD', wadBytes, true, true, true);
-              Module.FS_createDataFile('/', 'default.cfg', cfgBytes, true, true, true);
-            } else {
-              FS.writeFile('/DOOM1.WAD', wadBytes);
-              FS.writeFile('/default.cfg', cfgBytes);
-            }
-            log('4. Mounted! Launching Doom...');
-            setTimeout(() => { logEl.style.display = 'none'; }, 2500);
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
+      print: (t) => log('[DOOM] ' + t),
+      printErr: (t) => log('[DOOM] ' + t),
+      preRun: [
+        function() {
+          try {
+            log('2. Inside preRun! Preloading files...');
+            FS.createPreloadedFile('/', 'DOOM1.WAD', 'DOOM1.WAD', true, false);
+            FS.createPreloadedFile('/', 'default.cfg', 'default.cfg', true, false);
+            log('3. Preload queued! Starting main()...');
+            setTimeout(() => { logEl.style.display = 'none'; }, 3000);
+          } catch (e) {
+            log('[PRERUN ERR] ' + e.message);
           }
-        ]
-      };
-
-      const s = document.createElement('script');
-      s.src = 'chocolate-doom.js';
-      document.body.appendChild(s);
-    }).catch(err => {
-      log('[FAIL] ' + err.message);
-    });
+        }
+      ]
+    };
   </script>
+  <script src="chocolate-doom.js"></script>
 </body>
 </html>
