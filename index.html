@@ -1,4 +1,4 @@
-<<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <div id="log">1. Starting Chocolate Doom...</div>
+  <div id="log">1. Downloading DOOM1.WAD & default.cfg...</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
@@ -26,23 +26,28 @@
 
     window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
 
-    var Module = {
-      canvas: document.getElementById('canvas'),
-      arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-      print: (t) => log('[DOOM] ' + t),
-      printErr: (t) => log('[DOOM] ' + t),
-      preRun: [
-        function() {
-          log('2. Pausing boot to download DOOM1.WAD & default.cfg...');
-          Module.addRunDependency('wad-files');
+    Promise.all([
+      fetch('DOOM1.WAD').then(r => {
+        if (!r.ok) throw new Error('DOOM1.WAD HTTP ' + r.status);
+        return r.arrayBuffer();
+      }),
+      fetch('default.cfg').then(r => {
+        if (!r.ok) throw new Error('default.cfg HTTP ' + r.status);
+        return r.arrayBuffer();
+      })
+    ]).then(([wadBuf, cfgBuf]) => {
+      const wadBytes = new Uint8Array(wadBuf);
+      const cfgBytes = new Uint8Array(cfgBuf);
+      log('2. Downloaded (' + wadBytes.length + ' B). Starting engine...');
 
-          Promise.all([
-            fetch('DOOM1.WAD').then(r => r.arrayBuffer()),
-            fetch('default.cfg').then(r => r.arrayBuffer())
-          ]).then(([wadBuf, cfgBuf]) => {
-            const wadBytes = new Uint8Array(wadBuf);
-            const cfgBytes = new Uint8Array(cfgBuf);
-
+      window.Module = {
+        canvas: document.getElementById('canvas'),
+        arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
+        print: (t) => log('[DOOM] ' + t),
+        printErr: (t) => log('[DOOM] ' + t),
+        preRun: [
+          function() {
+            log('3. Mounting files into virtual disk...');
             if (typeof Module.FS_createDataFile === 'function') {
               Module.FS_createDataFile('/', 'DOOM1.WAD', wadBytes, true, true, true);
               Module.FS_createDataFile('/', 'default.cfg', cfgBytes, true, true, true);
@@ -50,17 +55,18 @@
               FS.writeFile('/DOOM1.WAD', wadBytes);
               FS.writeFile('/default.cfg', cfgBytes);
             }
+            log('4. Mounted! Launching Doom...');
+            setTimeout(() => { logEl.style.display = 'none'; }, 2500);
+          }
+        ]
+      };
 
-            log('3. Files mounted! Resuming Chocolate Doom...');
-            setTimeout(() => { logEl.style.display = 'none'; }, 2000);
-            Module.removeRunDependency('wad-files');
-          }).catch(err => {
-            log('[FAIL] ' + err.message);
-          });
-        }
-      ]
-    };
+      const s = document.createElement('script');
+      s.src = 'chocolate-doom.js';
+      document.body.appendChild(s);
+    }).catch(err => {
+      log('[FAIL] ' + err.message);
+    });
   </script>
-  <script src="chocolate-doom.js"></script>
 </body>
 </html>
