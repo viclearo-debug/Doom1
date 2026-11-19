@@ -29,35 +29,50 @@
 
     async function start() {
       try {
-        log('Fetching chocolate-doom.wasm...');
-        const wasmRes = await fetch('chocolate-doom.wasm');
+        log('1. Fetching WASM, WAD, and CFG...');
+        const [wasmRes, wadRes, cfgRes] = await Promise.all([
+          fetch('chocolate-doom.wasm'),
+          fetch('DOOM1.WAD'),
+          fetch('default.cfg')
+        ]);
+
         if (!wasmRes.ok) throw new Error('WASM HTTP ' + wasmRes.status);
-        const wasmBytes = await wasmRes.arrayBuffer();
-        log('WASM loaded (' + wasmBytes.byteLength + ' bytes).');
+        if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
+        if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
+
+        const [wasmBytes, wadBuf, cfgBuf] = await Promise.all([
+          wasmRes.arrayBuffer(),
+          wadRes.arrayBuffer(),
+          cfgRes.arrayBuffer()
+        ]);
+
+        const wadBytes = new Uint8Array(wadBuf);
+        const cfgBytes = new Uint8Array(cfgBuf);
+        log('2. All downloaded (WAD: ' + wadBytes.length + ' B, CFG: ' + cfgBytes.length + ' B).');
 
         window.Module = {
           wasmBinary: wasmBytes,
           canvas: document.getElementById('canvas'),
           arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-          print: (t) => log(t),
-          printErr: (t) => log(t),
+          print: (t) => log('[DOOM] ' + t),
+          printErr: (t) => log('[DOOM ERR] ' + t),
           preRun: [
             function() {
-              log('Preloading DOOM1.WAD and default.cfg...');
-              FS.createPreloadedFile('/', 'DOOM1.WAD', 'DOOM1.WAD', true, false);
-              FS.createPreloadedFile('/', 'default.cfg', 'default.cfg', true, false);
+              log('3. Writing files to virtual FS...');
+              FS.writeFile('/DOOM1.WAD', wadBytes);
+              FS.writeFile('/default.cfg', cfgBytes);
+              log('4. Files mounted! Calling main()...');
             }
           ],
           onRuntimeInitialized: function() {
-            log('Doom booted!');
-            setTimeout(() => { logEl.style.display = 'none'; }, 1500);
+            log('5. Runtime initialized!');
+            setTimeout(() => { logEl.style.display = 'none'; }, 2000);
           }
         };
 
-        log('Loading chocolate-doom.js...');
+        log('2b. Loading chocolate-doom.js...');
         const s = document.createElement('script');
         s.src = 'chocolate-doom.js';
-        s.onerror = () => log('[ERR] Failed to load chocolate-doom.js');
         document.body.appendChild(s);
       } catch (e) {
         log('[FAIL] ' + e.message);
