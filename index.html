@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <div id="log">Starting Chocolate Doom...</div>
+  <div id="log">1. Initializing Module...</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
@@ -27,59 +27,44 @@
     window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
     window.onunhandledrejection = (e) => log('[PROMISE] ' + e.reason);
 
-    async function start() {
-      try {
-        log('1. Fetching WASM, WAD, and CFG...');
-        const [wasmRes, wadRes, cfgRes] = await Promise.all([
-          fetch('chocolate-doom.wasm'),
-          fetch('DOOM1.WAD'),
-          fetch('default.cfg')
-        ]);
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      noInitialRun: true,
+      print: (t) => log('[DOOM] ' + t),
+      printErr: (t) => log('[DOOM ERR] ' + t),
+      onRuntimeInitialized: async function() {
+        try {
+          log('2. WASM Runtime ready! Fetching DOOM1.WAD & default.cfg...');
+          const [wadRes, cfgRes] = await Promise.all([
+            fetch('DOOM1.WAD'),
+            fetch('default.cfg')
+          ]);
+          if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
+          if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
 
-        if (!wasmRes.ok) throw new Error('WASM HTTP ' + wasmRes.status);
-        if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
-        if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
+          const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
+          const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
+          log('3. Downloaded WAD (' + wadBytes.length + ' B). Writing to FS...');
 
-        const [wasmBytes, wadBuf, cfgBuf] = await Promise.all([
-          wasmRes.arrayBuffer(),
-          wadRes.arrayBuffer(),
-          cfgRes.arrayBuffer()
-        ]);
-
-        const wadBytes = new Uint8Array(wadBuf);
-        const cfgBytes = new Uint8Array(cfgBuf);
-        log('2. All downloaded (WAD: ' + wadBytes.length + ' B, CFG: ' + cfgBytes.length + ' B).');
-
-        window.Module = {
-          wasmBinary: wasmBytes,
-          canvas: document.getElementById('canvas'),
-          arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-          print: (t) => log('[DOOM] ' + t),
-          printErr: (t) => log('[DOOM ERR] ' + t),
-          preRun: [
-            function() {
-              log('3. Writing files to virtual FS...');
-              FS.writeFile('/DOOM1.WAD', wadBytes);
-              FS.writeFile('/default.cfg', cfgBytes);
-              log('4. Files mounted! Calling main()...');
-            }
-          ],
-          onRuntimeInitialized: function() {
-            log('5. Runtime initialized!');
-            setTimeout(() => { logEl.style.display = 'none'; }, 2000);
+          if (typeof Module.FS_createDataFile === 'function') {
+            Module.FS_createDataFile('/', 'DOOM1.WAD', wadBytes, true, true, true);
+            Module.FS_createDataFile('/', 'default.cfg', cfgBytes, true, true, true);
+          } else if (typeof FS !== 'undefined') {
+            FS.writeFile('/DOOM1.WAD', wadBytes);
+            FS.writeFile('/default.cfg', cfgBytes);
+          } else {
+            throw new Error('No FS API exposed on Module or global scope');
           }
-        };
 
-        log('2b. Loading chocolate-doom.js...');
-        const s = document.createElement('script');
-        s.src = 'chocolate-doom.js';
-        document.body.appendChild(s);
-      } catch (e) {
-        log('[FAIL] ' + e.message);
+          log('4. Calling Module.callMain()...');
+          setTimeout(() => { logEl.style.display = 'none'; }, 2000);
+          Module.callMain(['-iwad', 'DOOM1.WAD', '-config', 'default.cfg']);
+        } catch (err) {
+          log('[FAIL] ' + err.message);
+        }
       }
-    }
-
-    start();
+    };
   </script>
+  <script src="chocolate-doom.js"></script>
 </body>
 </html>
