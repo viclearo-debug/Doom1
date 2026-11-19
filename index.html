@@ -14,23 +14,19 @@
   </style>
 </head>
 <body>
-  <div id="log">Checking files...</div>
+  <div id="log">Loading Doom...</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
     const logEl = document.getElementById('log');
     function log(msg) { logEl.textContent += '\n' + msg; }
 
-    window.onerror = function(msg, url, line) {
-      log('ERROR: ' + msg + ' (line ' + line + ')');
-    };
-
     async function boot() {
-      for (const file of ['DOOM1.WAD', 'default.cfg', 'chocolate-doom.wasm']) {
-        const res = await fetch(file);
-        log(file + ': ' + (res.ok ? 'OK (' + res.status + ')' : 'MISSING (' + res.status + ')'));
-        if (!res.ok) return;
-      }
+      const wadRes = await fetch('DOOM1.WAD');
+      const cfgRes = await fetch('default.cfg');
+      const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
+      const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
+      log('Downloaded WAD (' + wadBytes.length + ' bytes)');
 
       window.Module = {
         canvas: document.getElementById('canvas'),
@@ -39,13 +35,13 @@
         printErr: (t) => log('ERR: ' + t),
         preRun: [
           function() {
-            log('Mounting WAD into virtual disk...');
-            Module.FS_createPreloadedFile('/', 'DOOM1.WAD', 'DOOM1.WAD', true, false);
-            Module.FS_createPreloadedFile('/', 'default.cfg', 'default.cfg', true, false);
+            const fs = Module.FS || window.FS;
+            fs.writeFile('/DOOM1.WAD', wadBytes);
+            fs.writeFile('/default.cfg', cfgBytes);
+            log('Files written to virtual disk! Starting Doom...');
           }
         ],
         onRuntimeInitialized: function() {
-          log('Engine initialized!');
           setTimeout(() => { logEl.style.display = 'none'; }, 1500);
         }
       };
