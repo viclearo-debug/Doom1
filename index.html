@@ -1,4 +1,4 @@
-<!doctype html>
+<<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -10,45 +10,80 @@
       align-items: center; justify-content: center;
     }
     canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
-    #log { position: absolute; top: 10px; left: 10px; font-size: 14px; pointer-events: none; white-space: pre-wrap; }
+    #log {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      font-size: 13px; pointer-events: none; white-space: pre-wrap;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
-  <div id="log">Loading Doom...</div>
+  <div id="log">[1] Page loaded.</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
     const logEl = document.getElementById('log');
     function log(msg) { logEl.textContent += '\n' + msg; }
 
+    window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
+    window.onunhandledrejection = (e) => log('[PROMISE ERR] ' + e.reason);
+
     async function boot() {
-      const wadRes = await fetch('DOOM1.WAD');
-      const cfgRes = await fetch('default.cfg');
-      const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
-      const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
-      log('Downloaded WAD (' + wadBytes.length + ' bytes)');
+      try {
+        log('[2] Fetching DOOM1.WAD...');
+        const wadRes = await fetch('DOOM1.WAD');
+        if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
+        const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
+        log('[3] DOOM1.WAD ready (' + wadBytes.length + ' bytes)');
 
-      window.Module = {
-        canvas: document.getElementById('canvas'),
-        arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-        print: (t) => log(t),
-        printErr: (t) => log('ERR: ' + t),
-        preRun: [
-          function() {
-            const fs = Module.FS || window.FS;
-            fs.writeFile('/DOOM1.WAD', wadBytes);
-            fs.writeFile('/default.cfg', cfgBytes);
-            log('Files written to virtual disk! Starting Doom...');
+        log('[4] Fetching default.cfg...');
+        const cfgRes = await fetch('default.cfg');
+        if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
+        const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
+        log('[5] default.cfg ready (' + cfgBytes.length + ' bytes)');
+
+        window.Module = {
+          canvas: document.getElementById('canvas'),
+          arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
+          print: (t) => log('[OUT] ' + t),
+          printErr: (t) => log('[STDERR] ' + t),
+          preRun: [
+            function() {
+              log('[7] preRun triggered. Checking FS...');
+              const fs = Module.FS || window.FS;
+              if (!fs) {
+                log('[FAIL] FS object not found on Module or window!');
+                return;
+              }
+              fs.writeFile('/DOOM1.WAD', wadBytes);
+              fs.writeFile('/default.cfg', cfgBytes);
+              log('[8] Files written to virtual disk! Waiting for main()...');
+            }
+          ],
+          onRuntimeInitialized: function() {
+            log('[9] onRuntimeInitialized fired!');
+            setTimeout(() => { logEl.style.display = 'none'; }, 2500);
           }
-        ],
-        onRuntimeInitialized: function() {
-          setTimeout(() => { logEl.style.display = 'none'; }, 1500);
-        }
-      };
+        };
 
-      const s = document.createElement('script');
-      s.src = 'chocolate-doom.js';
-      document.body.appendChild(s);
+        log('[6] Loading chocolate-doom.js...');
+        const s = document.createElement('script');
+        s.src = 'chocolate-doom.js';
+        s.onload = () => {
+          log('[6b] chocolate-doom.js loaded. Module keys: ' + Object.keys(window.Module).slice(0, 8).join(', '));
+          // Check if chocolate-doom.js exported a factory function instead of auto-running
+          for (const key of Object.keys(window)) {
+            if (typeof window[key] === 'function' && /doom|module/i.test(key) && key !== 'Module') {
+              log('[INFO] Found global function: ' + key);
+            }
+          }
+        };
+        s.onerror = () => log('[FAIL] Failed to load chocolate-doom.js');
+        document.body.appendChild(s);
+
+      } catch (err) {
+        log('[CRASH] ' + err.message);
+      }
     }
 
     boot();
