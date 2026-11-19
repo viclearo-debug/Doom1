@@ -1,4 +1,4 @@
-<!doctype html>
+<<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -17,7 +17,7 @@
   </style>
 </head>
 <body>
-  <div id="log">1. Initializing Module...</div>
+  <div id="log">1. Starting Chocolate Doom...</div>
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
   <script>
@@ -25,44 +25,40 @@
     function log(msg) { logEl.textContent += '\n' + msg; }
 
     window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
-    window.onunhandledrejection = (e) => log('[PROMISE] ' + e.reason);
 
     var Module = {
       canvas: document.getElementById('canvas'),
-      noInitialRun: true,
+      arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
       print: (t) => log('[DOOM] ' + t),
-      printErr: (t) => log('[DOOM ERR] ' + t),
-      onRuntimeInitialized: async function() {
-        try {
-          log('2. WASM Runtime ready! Fetching DOOM1.WAD & default.cfg...');
-          const [wadRes, cfgRes] = await Promise.all([
-            fetch('DOOM1.WAD'),
-            fetch('default.cfg')
-          ]);
-          if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
-          if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
+      printErr: (t) => log('[DOOM] ' + t),
+      preRun: [
+        function() {
+          log('2. Pausing boot to download DOOM1.WAD & default.cfg...');
+          Module.addRunDependency('wad-files');
 
-          const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
-          const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
-          log('3. Downloaded WAD (' + wadBytes.length + ' B). Writing to FS...');
+          Promise.all([
+            fetch('DOOM1.WAD').then(r => r.arrayBuffer()),
+            fetch('default.cfg').then(r => r.arrayBuffer())
+          ]).then(([wadBuf, cfgBuf]) => {
+            const wadBytes = new Uint8Array(wadBuf);
+            const cfgBytes = new Uint8Array(cfgBuf);
 
-          if (typeof Module.FS_createDataFile === 'function') {
-            Module.FS_createDataFile('/', 'DOOM1.WAD', wadBytes, true, true, true);
-            Module.FS_createDataFile('/', 'default.cfg', cfgBytes, true, true, true);
-          } else if (typeof FS !== 'undefined') {
-            FS.writeFile('/DOOM1.WAD', wadBytes);
-            FS.writeFile('/default.cfg', cfgBytes);
-          } else {
-            throw new Error('No FS API exposed on Module or global scope');
-          }
+            if (typeof Module.FS_createDataFile === 'function') {
+              Module.FS_createDataFile('/', 'DOOM1.WAD', wadBytes, true, true, true);
+              Module.FS_createDataFile('/', 'default.cfg', cfgBytes, true, true, true);
+            } else {
+              FS.writeFile('/DOOM1.WAD', wadBytes);
+              FS.writeFile('/default.cfg', cfgBytes);
+            }
 
-          log('4. Calling Module.callMain()...');
-          setTimeout(() => { logEl.style.display = 'none'; }, 2000);
-          Module.callMain(['-iwad', 'DOOM1.WAD', '-config', 'default.cfg']);
-        } catch (err) {
-          log('[FAIL] ' + err.message);
+            log('3. Files mounted! Resuming Chocolate Doom...');
+            setTimeout(() => { logEl.style.display = 'none'; }, 2000);
+            Module.removeRunDependency('wad-files');
+          }).catch(err => {
+            log('[FAIL] ' + err.message);
+          });
         }
-      }
+      ]
     };
   </script>
   <script src="chocolate-doom.js"></script>
