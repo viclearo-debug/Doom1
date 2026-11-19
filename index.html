@@ -3,90 +3,23 @@
 <head>
   <meta charset="utf-8">
   <style>
-    html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #000; color: #0f0; font-family: monospace;
-      overflow: hidden; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-    }
-    canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
-    #log {
-      position: absolute; top: 10px; left: 10px; right: 10px;
-      font-size: 13px; pointer-events: none; white-space: pre-wrap;
-      z-index: 10;
-    }
+    body { margin: 16px; background: #000; color: #0f0; font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
 <body>
-  <div id="log"> Page loaded.</div>
-  <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-
-  <script type="module">
-    const logEl = document.getElementById('log');
-    function log(msg) { logEl.textContent += '\n' + msg; }
-
-    window.onerror = (msg, src, line) => log('[ERR] ' + msg + ' @ line ' + line);
-    window.onunhandledrejection = (e) => log('[PROMISE ERR] ' + e.reason);
-
-    async function boot() {
-      try {
-        log(' Fetching DOOM1.WAD & default.cfg...');
-        const [wadRes, cfgRes] = await Promise.all([
-          fetch('DOOM1.WAD'),
-          fetch('default.cfg')
-        ]);
-        if (!wadRes.ok) throw new Error('DOOM1.WAD HTTP ' + wadRes.status);
-        if (!cfgRes.ok) throw new Error('default.cfg HTTP ' + cfgRes.status);
-
-        const wadBytes = new Uint8Array(await wadRes.arrayBuffer());
-        const cfgBytes = new Uint8Array(await cfgRes.arrayBuffer());
-        log(' Files downloaded (' + wadBytes.length + ' bytes).');
-
-        const moduleConfig = {
-          canvas: document.getElementById('canvas'),
-          arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
-          print: (t) => log('[OUT] ' + t),
-          printErr: (t) => log('[STDERR] ' + t),
-          preRun: [
-            function(mod) {
-              log(' preRun triggered!');
-              const fs = (mod && mod.FS) || (window.Module && window.Module.FS) || window.FS;
-              if (!fs) {
-                log('[FAIL] No FS found!');
-                return;
-              }
-              fs.writeFile('/DOOM1.WAD', wadBytes);
-              fs.writeFile('/default.cfg', cfgBytes);
-              log(' Files written! Launching Doom...');
-            }
-          ],
-          onRuntimeInitialized: function() {
-            log(' Runtime initialized!');
-            setTimeout(() => { logEl.style.display = 'none'; }, 2000);
-          }
-        };
-
-        window.Module = moduleConfig;
-
-        log(' Importing chocolate-doom.js as ES module...');
-        const imported = await import('./chocolate-doom.js');
-        log(' Imported keys: ' + Object.keys(imported).join(', '));
-
-        const factory = imported.default || Object.values(imported).find(v => typeof v === 'function');
-        if (typeof factory === 'function') {
-          log(' Calling factory function...');
-          await factory(moduleConfig);
-          log(' Factory resolved!');
-        } else {
-          log('[INFO] No factory exported; waiting on global Module...');
-        }
-
-      } catch (err) {
-        log('[CRASH] ' + err.message);
-      }
-    }
-
-    boot();
+  <div id="out">Reading chocolate-doom.js header & footer...</div>
+  <script>
+    fetch('chocolate-doom.js')
+      .then(r => r.text())
+      .then(txt => {
+        document.getElementById('out').textContent =
+          'LENGTH: ' + txt.length + '\n\n' +
+          '--- START ---\n' + txt.slice(0, 400) + '\n\n' +
+          '--- END ---\n' + txt.slice(-400);
+      })
+      .catch(e => {
+        document.getElementById('out').textContent = 'ERR: ' + e;
+      });
   </script>
 </body>
 </html>
