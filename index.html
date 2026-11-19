@@ -1,6 +1,4 @@
-import requests
-import random
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -11,8 +9,11 @@ import random
       width: 100%;
       height: 100%;
       background: #000;
+      color: #0f0;
+      font-family: monospace;
       overflow: hidden;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
@@ -22,20 +23,50 @@ import random
       object-fit: contain;
       display: block;
     }
+    #log {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 14px;
+      pointer-events: none;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
-  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="log">Starting engine...</div>
+  <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+
   <script>
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent += '\n' + msg;
+    }
+
+    window.onerror = function(msg, url, line) {
+      log('ERROR: ' + msg + ' (line ' + line + ')');
+    };
+
     var Module = {
       canvas: document.getElementById('canvas'),
       arguments: ['-iwad', 'DOOM1.WAD', '-config', 'default.cfg'],
+      print: function(text) {
+        log(text);
+      },
+      printErr: function(text) {
+        log('ERR: ' + text);
+      },
       preRun: [
         function() {
-          FS.createPreloadedFile('/', 'DOOM1.WAD', 'DOOM1.WAD', true, false);
-          FS.createPreloadedFile('/', 'default.cfg', 'default.cfg', true, false);
+          log('Preloading DOOM1.WAD and default.cfg...');
+          Module.FS_createPreloadedFile('/', 'DOOM1.WAD', 'DOOM1.WAD', true, false);
+          Module.FS_createPreloadedFile('/', 'default.cfg', 'default.cfg', true, false);
         }
-      ]
+      ],
+      onRuntimeInitialized: function() {
+        log('Runtime initialized!');
+        setTimeout(() => { logEl.style.display = 'none'; }, 2000);
+      }
     };
   </script>
   <script src="chocolate-doom.js"></script>
